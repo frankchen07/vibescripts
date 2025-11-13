@@ -1,1 +1,3 @@
-# homebrew-checker
+# vibescripts
+
+basically shit to make my life easier
