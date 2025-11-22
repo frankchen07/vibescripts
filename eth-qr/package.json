@@ -1,0 +1,15 @@
+{
+  "name": "eth-qr",
+  "version": "1.0.0",
+  "description": "generate QR codes with prefilled fields to pay your ethereum address",
+  "main": "generate-qr.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "ethereum-qr-code": "^0.3.0"
+  }
+}
