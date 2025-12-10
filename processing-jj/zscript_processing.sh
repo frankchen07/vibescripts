@@ -6,7 +6,7 @@ PARENT_DIR=$(cd "$DIR/.." && pwd)
 
 # Define output directories
 COMPRESSED_SAVE_DIR="$PARENT_DIR/rolling-compressed-save"
-YTREADY_UPLOAD_DIR="$PARENT_DIR/rolling-compressed-nsprefix-upload-del"
+YTREADY_UPLOAD_DIR="$PARENT_DIR/rolling-ytready-upload-del"
 
 # Create output directories if they don't exist
 mkdir -p "$COMPRESSED_SAVE_DIR"

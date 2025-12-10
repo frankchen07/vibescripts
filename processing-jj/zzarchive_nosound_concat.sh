@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Define directories relative to script location
 COMPRESSED_SAVE_DIR="$SCRIPT_DIR/rolling-compressed-save"
-YTREADY_UPLOAD_DIR="$SCRIPT_DIR/rolling-compressed-nsprefix-upload-del"
+YTREADY_UPLOAD_DIR="$SCRIPT_DIR/rolling-ytready-upload-del"
 prepend_file="$SCRIPT_DIR/10p-append-4kto720p.mov"
 
 # Create output directory if it doesn't exist
