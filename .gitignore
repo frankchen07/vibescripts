@@ -1,0 +1,28 @@
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Video files
+*.mov
+**/*.mov
+
+# Image files
+*.heic
+*.HEIC
+**/*.heic
+**/*.HEIC
+
+*.jpeg
+*.JPEG
+**/*.jpeg
+**/*.JPEG
+
+*.jpg
+*.JPG
+**/*.jpg
+**/*.JPG
+
+*.png
+*.PNG
+**/*.png
+**/*.PNG
