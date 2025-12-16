@@ -20,11 +20,23 @@ done
 
 # Default to current directory if no directory specified
 DIR=${DIR:-.}
-PARENT_DIR=$(cd "$DIR/.." && pwd)
+# Get the script's directory for output directories
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Define output directory (in processing-jj folder)
+TEACHING_COMPRESSED_DIR="$SCRIPT_DIR/teaching-compressed"
+
+# Create output directory if it doesn't exist, or verify it exists
+if [[ -d "$TEACHING_COMPRESSED_DIR" ]]; then
+    echo "Using existing directory: $TEACHING_COMPRESSED_DIR"
+else
+    mkdir -p "$TEACHING_COMPRESSED_DIR" && echo "Created directory: $TEACHING_COMPRESSED_DIR"
+fi
 
 # Ensure necessary tools are available
 command -v ffmpeg >/dev/null 2>&1 || { echo "ffmpeg is not installed. Exiting." >&2; exit 1; }
 command -v ffprobe >/dev/null 2>&1 || { echo "ffprobe is not installed. Exiting." >&2; exit 1; }
+command -v trash >/dev/null 2>&1 || { echo "trash is not installed. Exiting." >&2; exit 1; }
 
 # Function to check if a video file is valid
 check_video_valid() {
@@ -34,7 +46,8 @@ check_video_valid() {
     return $?
 }
 
-# Step 2: Compress files first
+# Step 1: Compress files first
+echo "=== Step 1: Compressing video files ==="
 for input_file in "$DIR"/*.mov; do
   
   # Skip if no .mov files found (glob expansion)
@@ -60,7 +73,7 @@ for input_file in "$DIR"/*.mov; do
   # Create compressed file
   compressed_file="$DIR/${name}-compressed.${extension}"
   if [[ ! -f "$compressed_file" ]]; then
-    echo "Compressing: $input_file -> $compressed_file"
+    echo "Compressing $input_file -> $compressed_file"
     
     # Build ffmpeg command with conditional high profile option
     ffmpeg_cmd=(
@@ -91,36 +104,49 @@ for input_file in "$DIR"/*.mov; do
   fi
 done
 
-# Step 1.5: Handle compressed files - trash and rename compressed files
+# Step 2: Move compressed files to teaching-compressed and trash originals
+echo ""
+echo "=== Step 2: Moving compressed files to teaching-compressed and trashing originals ==="
 for compressed_file in "$DIR"/*-compressed.mov; do
-    if [[ -f "$compressed_file" ]]; then
-        # Validate the compressed file before proceeding
-        echo "Validating compressed file: $compressed_file"
-        if ! check_video_valid "$compressed_file"; then
-            echo "ERROR: $compressed_file is invalid or corrupted. Skipping rename to preserve original."
-            rm -f "$compressed_file"  # Remove the bad compressed file
-            continue
-        fi
-        
-        # Check that the file has actual content (not empty)
-        if [[ ! -s "$compressed_file" ]]; then
-            echo "ERROR: $compressed_file is empty. Skipping rename to preserve original."
-            rm -f "$compressed_file"  # Remove the empty file
-            continue
-        fi
-        
-        # Generate the new filename by removing "-compressed"
-        new_file="${compressed_file//-compressed/}"
-        
-        # Check if the non-suffixed file exists and move it to trash first
-        if [[ -f "$new_file" ]]; then
-            echo "Moving to trash: $new_file"
-            trash "$new_file"
-        fi
-        
-        # Rename the compressed file
-        mv "$compressed_file" "$new_file"
-        
-        echo "Renamed: $compressed_file -> $new_file"
+    if [[ ! -f "$compressed_file" ]]; then
+        continue
+    fi
+    
+    # Validate the compressed file before proceeding
+    echo "Validating compressed file: $compressed_file"
+    if ! check_video_valid "$compressed_file"; then
+        echo "ERROR: $compressed_file is invalid or corrupted. Skipping to preserve original."
+        rm -f "$compressed_file"  # Remove the bad compressed file
+        continue
+    fi
+    
+    # Check that the file has actual content (not empty)
+    if [[ ! -s "$compressed_file" ]]; then
+        echo "ERROR: $compressed_file is empty. Skipping to preserve original."
+        rm -f "$compressed_file"  # Remove the empty file
+        continue
+    fi
+    
+    # Generate the original filename by removing "-compressed"
+    original_file="${compressed_file//-compressed/}"
+    original_filename=$(basename -- "$original_file")
+    final_dest="$TEACHING_COMPRESSED_DIR/$original_filename"
+    
+    # Move compressed file to teaching-compressed and rename to remove -compressed suffix
+    if [[ ! -f "$final_dest" ]]; then
+        echo "Moving compressed file to teaching-compressed: $compressed_file -> $final_dest"
+        mv "$compressed_file" "$final_dest"
+    else
+        echo "File already exists in teaching-compressed: $final_dest"
+        rm -f "$compressed_file"  # Remove duplicate
+    fi
+    
+    # Move original file to trash if it exists
+    if [[ -f "$original_file" ]]; then
+        echo "Moving original to trash: $original_file"
+        trash "$original_file"
     fi
 done
+
+echo ""
+echo "All tasks completed successfully!"
