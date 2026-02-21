@@ -47,37 +47,54 @@ check_video_valid() {
 }
 
 # Step 1: Compress files first
+echo ""
 echo "=== Step 1: Compressing video files ==="
-for input_file in "$DIR"/*.mov; do
-  
-  # Skip if no .mov files found (glob expansion)
-  [[ ! -f "$input_file" ]] && continue
-  
-  # Skip specific files
-  if [[ "$input_file" == *"/10p-append-4kto720p.mov" ]]; then
-    echo "Skipping $input_file: Excluded file."
-    continue
-  fi
+shopt -s nullglob
+mov_files=("$DIR"/*.mov)
 
-  # Check if file is valid before processing
-  echo "Checking validity of: $input_file"
-  if ! check_video_valid "$input_file"; then
-    echo "ERROR: $input_file appears to be corrupted or incomplete. Skipping."
-    continue
-  fi
+if [ ${#mov_files[@]} -eq 0 ]; then
+  echo "No .mov files found in $DIR"
+  exit 1
+fi
 
+# Filter out excluded files
+filtered_files=()
+for file in "${mov_files[@]}"; do
+  filename=$(basename -- "$file")
+  if [[ "$filename" != "10p-append-4kto720p.mov" ]]; then
+    filtered_files+=("$file")
+  fi
+done
+
+if [ ${#filtered_files[@]} -eq 0 ]; then
+  echo "No files to process (all files excluded)."
+  exit 1
+fi
+
+echo "Found ${#filtered_files[@]} file(s) to process..."
+echo ""
+
+for input_file in "${filtered_files[@]}"; do
   filename=$(basename -- "$input_file")
   extension="${filename##*.}"
   name="${filename%.*}"
 
+  # Check if file is valid before processing
+  echo "Checking validity: $filename"
+  if ! check_video_valid "$input_file"; then
+    echo "ERROR: $filename appears to be corrupted or incomplete. Skipping."
+    echo ""
+    continue
+  fi
+
   # Create compressed file
   compressed_file="$DIR/${name}-compressed.${extension}"
   if [[ ! -f "$compressed_file" ]]; then
-    echo "Compressing $input_file -> $compressed_file"
+    echo "Compressing: $filename -> ${name}-compressed.${extension}"
     
     # Build ffmpeg command with conditional high profile option
     ffmpeg_cmd=(
-      ffmpeg -i "$input_file"
+      ffmpeg -loglevel error -hide_banner -nostats -i "$input_file"
       -c:v libx264 -profile:v high -level 4.1 -preset veryfast -crf 23
       -vf "scale=1280:720,fps=30"
       -b:v 8083k
@@ -94,36 +111,48 @@ for input_file in "$DIR"/*.mov; do
       "$compressed_file"
     )
     
-    if ! "${ffmpeg_cmd[@]}" 2>&1 | tee /tmp/ffmpeg_output.log; then
-      echo "ERROR: Failed to compress $input_file. Check /tmp/ffmpeg_output.log for details."
+    if ! "${ffmpeg_cmd[@]}"; then
+      echo "ERROR: Failed to compress $filename"
       rm -f "$compressed_file"  # Remove partial file if compression failed
+      echo ""
       continue
     fi
+    echo "✓ Compression complete: ${name}-compressed.${extension}"
   else
-    echo "Compressed file already exists: $compressed_file"
+    echo "Compressed file already exists: ${name}-compressed.${extension}"
   fi
+  echo ""
 done
 
 # Step 2: Move compressed files to teaching-compressed and trash originals
 echo ""
 echo "=== Step 2: Moving compressed files to teaching-compressed and trashing originals ==="
-for compressed_file in "$DIR"/*-compressed.mov; do
-    if [[ ! -f "$compressed_file" ]]; then
-        continue
-    fi
-    
+shopt -s nullglob
+compressed_files=("$DIR"/*-compressed.mov)
+
+if [ ${#compressed_files[@]} -eq 0 ]; then
+  echo "No compressed files found to move."
+else
+  echo "Processing ${#compressed_files[@]} compressed file(s)..."
+  echo ""
+fi
+
+for compressed_file in "${compressed_files[@]}"; do
     # Validate the compressed file before proceeding
-    echo "Validating compressed file: $compressed_file"
+    filename=$(basename -- "$compressed_file")
+    echo "Validating: $filename"
     if ! check_video_valid "$compressed_file"; then
-        echo "ERROR: $compressed_file is invalid or corrupted. Skipping to preserve original."
+        echo "ERROR: $filename is invalid or corrupted. Skipping to preserve original."
         rm -f "$compressed_file"  # Remove the bad compressed file
+        echo ""
         continue
     fi
     
     # Check that the file has actual content (not empty)
     if [[ ! -s "$compressed_file" ]]; then
-        echo "ERROR: $compressed_file is empty. Skipping to preserve original."
+        echo "ERROR: $filename is empty. Skipping to preserve original."
         rm -f "$compressed_file"  # Remove the empty file
+        echo ""
         continue
     fi
     
@@ -132,20 +161,28 @@ for compressed_file in "$DIR"/*-compressed.mov; do
     original_filename=$(basename -- "$original_file")
     final_dest="$TEACHING_COMPRESSED_DIR/$original_filename"
     
-    # Move compressed file to teaching-compressed and rename to remove -compressed suffix
-    if [[ ! -f "$final_dest" ]]; then
-        echo "Moving compressed file to teaching-compressed: $compressed_file -> $final_dest"
+    # Handle case where original is already in output directory
+    if [[ -f "$final_dest" ]]; then
+        # Original is in output directory - trash it first, then replace with compressed
+        echo "Replacing existing file in teaching-compressed: $original_filename"
+        echo "Moving original to trash: $original_filename"
+        trash "$final_dest"
+        echo "Moving compressed file: $filename -> $original_filename"
         mv "$compressed_file" "$final_dest"
+        echo "✓ File replaced successfully"
     else
-        echo "File already exists in teaching-compressed: $final_dest"
-        rm -f "$compressed_file"  # Remove duplicate
+        # Normal case: move compressed file to output directory
+        echo "Moving compressed file to teaching-compressed: $filename -> $original_filename"
+        mv "$compressed_file" "$final_dest"
+        
+        # Move original file to trash if it exists (and is different from final_dest)
+        if [[ -f "$original_file" && "$original_file" != "$final_dest" ]]; then
+            echo "Moving original to trash: $(basename "$original_file")"
+            trash "$original_file"
+        fi
+        echo "✓ File moved successfully"
     fi
-    
-    # Move original file to trash if it exists
-    if [[ -f "$original_file" ]]; then
-        echo "Moving original to trash: $original_file"
-        trash "$original_file"
-    fi
+    echo ""
 done
 
 echo ""
